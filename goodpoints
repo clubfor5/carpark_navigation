@@ -1,0 +1,8 @@
+1.Different with particle filter constrain:
+  1) Dicretize the orientation, states and transition of states so reduce the computation power. 
+
+2.Modeling: Huber loss for outlier (Multi gaussian?)
+
+3.Turn detection(Complementary of orientation constrain)
+
+4.Particle filter: 钻牛角尖, need much more particles to get the distribution
