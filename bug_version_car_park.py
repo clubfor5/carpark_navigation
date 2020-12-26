@@ -1,4 +1,3 @@
-
 import numpy as np
 import time as ti
 import random
@@ -12,17 +11,26 @@ import beaconTable
 exception = 0
 minDis  = 1
 wifi_sigma2 = 90000
-ble_sigma = 80
-orientation_sigma2 = 0.25
-
+ble_sigma = 13.33* 9
+orientation_sigma2 = 0.36
+ble_bias = 3*13.33
+def bias_gauss(error, bias, sigma):
+    if error > bias:    
+        g = 1000 * math.e ** -((error-bias) ** 2 / ( sigma**2 * 2))  
+    else:
+        g = g = 1000 * math.e ** -( 1 ** 2 / ( sigma**2 * 2))  
+    return g
 def huber_gauss(error, sigma):
     if abs(error) < abs(sigma):
         Loss =  1/2 * error ** 2 
     else:
         Loss =   sigma*(abs(error)- 1/2*sigma)
-    g = 100 * math.e ** (-Loss/(sigma*sigma))  
+    g = 10 * math.e ** (-Loss/(sigma*sigma))  
     return g
 
+def w_gauss(error, sigma2):
+    g = 10000 * math.e ** -(error ** 2 / (2 * sigma2))  
+    return g
 def generateCandidatePoints(map):
     return "pending implement"
 
@@ -109,9 +117,9 @@ def transition2(weight_dict, neighbor_dict,yaw,samplePeriod,speed,grid_dis):
             #print(error,w_gauss(error,orientation_sigma2 ) )
 
             if error > 0:
-                new_weight_dict[str(neighbor)] += weight_dict[pos]*w_gauss(error,orientation_sigma2 )  # belief * transition
+                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error,orientation_sigma2 )  # belief * transition
             else:  
-                new_weight_dict[str(neighbor)] += weight_dict[pos]*w_gauss(error_min,orientation_sigma2 )*(1-samplePeriod*speed/grid_dis)*0.2
+                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error_min,orientation_sigma2 )*(1-samplePeriod*speed/grid_dis)*0.2
             #print(new_weight_dict)
             #ti.sleep(0.1)
     return new_weight_dict
@@ -158,7 +166,7 @@ def transition3(weight_dict, neighbor_dict,yaw,samplePeriod,speed,grid_dis):
             #print(error,w_gauss(error,orientation_sigma2 ) )
 
             if error != 0:
-                new_neighbor_dict_buff[str(neighbor)]  = w_gauss(error,orientation_sigma2 )  # belief * transition
+                new_neighbor_dict_buff[str(neighbor)]  = huber_gauss(error,orientation_sigma2 )  # belief * transition
             else: 
                 new_neighbor_dict_buff[str(neighbor)] =  0
         #print(new_neighbor_dict_buff)
@@ -231,12 +239,8 @@ def update_gyroscope(turn, weight_dict, neighbor_dict):
         candidatePos = json.loads(pos)
         if isTurnPoint(candidatePos, neighbor_dict[pos]):
             weight_dict[pos] *= 5
+import matplotlib as plt
 
-    return weight_dict
-
-def w_gauss(error, sigma2):
-    g = 10000 * math.e ** -(error ** 2 / (2 * sigma2))  
-    return g
 
 def ble_localization(bleTable):
     pos = [0,0]
@@ -257,6 +261,7 @@ def ble_localization(bleTable):
 #  bleTable:[ {'x': x, 'y':y, 'rssi':rssi}
 def updateBle(bleTable, weight_dict):
     ble_weight_dict = {}
+    #print(weight_dict)
     for pos in weight_dict:
         for bleSignal in bleTable:
             blePos = [bleSignal['x'], bleSignal['y']]
@@ -265,6 +270,7 @@ def updateBle(bleTable, weight_dict):
             likelyhood = 1000*(10**(-Loss))
             candidatePos = json.loads(pos)
             dis = euclideanDistance(candidatePos,blePos)
+            #ble_weight = huber_gauss(dis, ble_sigma)
             ble_weight = huber_gauss(dis, ble_sigma)
             if not(pos in ble_weight_dict.keys()):
                 ble_weight_dict[pos] = ble_weight* likelyhood
@@ -272,32 +278,6 @@ def updateBle(bleTable, weight_dict):
                 ble_weight_dict[pos]+=  ble_weight* likelyhood
     for pos in ble_weight_dict:
         weight_dict[pos]*=ble_weight_dict[pos]
-    return weight_dict
-
-def updateMultiWiFi(wifi, weight_dict):
-    wifi_weight_dict = {}
-    for pos in weight_dict:
-        for wifiSignal in wifi:
-            wifi_pos = [wifiSignal['x'], wifiSignal['y']]
-            candidatePos = json.loads(pos)
-            dis = euclideanDistance(candidatePos, wifi_pos)
-            wifi_weight = w_gauss(dis, wifi_sigma2)
-            if not (pos in wifi_weight_dict.keys()):
-                wifi_weight_dict[pos] = wifi_weight * wifiSignal['likelihood']
-            else:
-                wifi_weight_dict[pos]+= wifi_weight * wifiSignal['likelihood']
-    for pos in weight_dict:
-        weight_dict[pos]*=wifi_weight_dict[pos]
-    return weight_dict
-
-def update_wifi(wifiPos,weight_dict):
-    for pos in weight_dict: 
-        candidatePos = json.loads(pos)
-        dis = euclideanDistance(candidatePos, wifiPos)
-        #print(candidatePos, wifiPos,dis)
-        wifi_weight = w_gauss(dis, wifi_sigma2)
-        #print(wifi_weight)
-        weight_dict[pos] *= wifi_weight
     return weight_dict
 
 def update_acclerometer():
@@ -341,7 +321,9 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
     iBeaconErrorList = []
     samplePeriod = INS_samples * 0.01
     gtFile = open("movements.dat")
+    
     lines = gtFile.readlines()
+    print(lines)
     rawPosTable = [] 
     for line in lines:
         pos = {}
@@ -421,8 +403,8 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
         # ------------- Turning  detection and update-----------#
         turn = turning(insBuffer)
         
-        #if turn:
-            #print("turn")
+        if turn:
+            print("turn")
         #else:
             #print("not turn")
         
@@ -463,6 +445,9 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
         plt.xlim(600,1200)
         plt.ylim(-2332,-1735)
         plt.scatter(x, y,s=w,color='blue')
+        if groundTruth:
+            plt.scatter(groundTruth['x'],-groundTruth['y'],s = 50,color = 'green')
+        
         plt.pause((endTime-startTime)/3000)
         plt. clf()
         '''
@@ -475,8 +460,6 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
             iBeaconErrorList.append(iBeaconPosError)
         #print(error/13.33)
         errorList.append(error)
-        #if groundTruth:
-            #plt.scatter(groundTruth['x'],-groundTruth['y'],s = 50,color = 'green')
         #plt.scatter(xMax,-yMax,s=wMax*500,color='red')
         #plt.pause((endTime-startTime)/3000)
         #plt. clf()
@@ -524,21 +507,67 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
     #plt.annotate("HMM", xy=(1, period_hmm/len(errorList)), xytext = (0.8, period_hmm/len(errorList)+0.002))
     #plt.plot([0,1],[period_hmm/len(errorList),period_hmm/len(errorList)],linestyle='--',color='blue')
     #plt.show()
-     
-if __name__ == '__main__':
-    #particleErrorList,time = pf.pf_process(2000)
+
+def INS_Error_Draw():
     speedList = [2+i*0.3 for i in range(21)]
     #speedX = 4
+    global orientation_sigma2 
     bestPerformanceError = []
     samplingList = []
     iBeaconVars = [i*13.33 +13.33  for i in range(20)]
     iBeaconVarsm = [i +1 for i in range(20)]
     insError = [0.1+0.05*i for i in range(19)]
+    insErrorDegree = [5.729+57.29*0.05*i for i in range(19)]
     for insE in insError:
-        orientation_sigma2 = insE*insE
-        orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=0.8)
-        rmsError = rms(hmmErrorList)
-        bestPerformanceError.append(rmsError)
+        orientation_sigma2 = insE
+        orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
+        rms_error = rms(hmmErrorList)
+        print("vars: " + str(insE) + "; error:"+ str(rms_error))
+        bestPerformanceError.append(rms_error)
+    orientation_sigma2 = 0.36
+    plt.xlim(6,57)
+    tick =   [int(6+3*i)for i in range(18)]
+    plt.xticks(tick)
+    plt.title(r"Error versus $\sigma_{\phi}$",fontsize=15)
+    plt.xlabel(r"$\sigma_{\phi}(rad)")
+    plt.ylabel('Localization rms error(m)')
+    #plt.plot(speedList,bestPerformanceError)
+    plt.plot(insErrorDegree,bestPerformanceError)   
+    plt.savefig('Orientation error.png')
+    plt.show()
+
+def iBeacon_Error_Draw():
+    iBeaconVars = [i*13.33 +13.33  for i in range(0,20)]
+    iBeaconBias = [i*13.33+13.33 for i in range(10)]
+    global ble_bias, ble_sigma
+    errorList = []
+    for vars in iBeaconVars:
+        ble_sigma = vars
+        orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
+        errorList.append(rms(hmmErrorList))
+        rms_error = rms(hmmErrorList)
+        print("vars: " + str(vars) + "; error:"+ str(rms_error))
+    plt.xlim(1,20)
+    tick = [int(i+1)  for i in range(0,20)]
+    plt.xticks(tick)
+    plt.title(r"Error versus $\sigma_{ble}$",fontsize=15)
+    plt.xlabel(r"$\sigma_{ble}$(m)")
+    plt.ylabel('rms error(m)')
+    #plt.plot(speedList,bestPerformanceError)
+    plt.plot(tick,errorList)   
+    plt.savefig('BLE error.png')
+    plt.show()
+if __name__ == '__main__':
+    INS_Error_Draw()
+    iBeacon_Error_Draw()
+    '''
+    orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
+    print(rms(hmmErrorList[7:]))
+    plt.plot(hmmErrorList[7:])
+    plt.show()
+    plt.plot(iBeaconErrorList)
+    plt.show()
+    '''
     '''
     for speedX in speedList:
         point_dis_list = [0.2*i for i in range(1,10)]
@@ -561,18 +590,7 @@ if __name__ == '__main__':
         plt.savefig('sampling period'+str(i/50)+'.png')
         plt.clf()
 '''
-    plt.xlim(0.1,1)
-    plt.ylim(0,30)
-    tick = insError
-    plt.xticks(tick)
-    plt.title('Error performance with different INS error hypothesis ',fontsize=15)
-    plt.xlabel('INS  error hypothsis(rad)')
-    plt.ylabel('rms error(m)')
-    #plt.plot(speedList,bestPerformanceError)
-    plt.plot(insError,bestPerformanceError)
-   
-    plt.savefig('INS error.png')
-    plt.show()
+    
     
     '''
     X = []
@@ -690,4 +708,4 @@ def test():
 #t =10
 
     
-
+#nextly, we need to do the sensor update. But the lieklyhood and vitebi algorithm remains to be an issue         
