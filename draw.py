@@ -10,11 +10,11 @@ import math
 import turtle
 import random
 
-turtle.tracer(50000, delay=0)
-turtle.register_shape("dot", ((-3,-3), (-3,3), (3,3), (3,-3)))
-turtle.register_shape("tri", ((-3, -2), (0, 3), (3, -2), (0, 0)))
-turtle.speed(0)
-turtle.title("Poor robbie is lost")
+#turtle.tracer(50000, delay=0)
+#turtle.register_shape("dot", ((-3,-3), (-3,3), (3,3), (3,-3)))
+#turtle.register_shape("tri", ((-3, -2), (0, 3), (3, -2), (0, 0)))
+#turtle.speed(0)
+#turtle.title("Poor robbie is lost")
 
 UPDATE_EVERY = 0
 DRAW_EVERY = 2

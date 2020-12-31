@@ -11,9 +11,8 @@ import beaconTable
 exception = 0
 minDis  = 1
 wifi_sigma2 = 90000
-ble_sigma = 13.33* 9
-orientation_sigma2 = 0.36
-ble_bias = 3*13.33
+ble_sigma = 133.3
+orientation_sigma = 0.36
 def bias_gauss(error, bias, sigma):
     if error > bias:    
         g = 1000 * math.e ** -((error-bias) ** 2 / ( sigma**2 * 2))  
@@ -25,7 +24,7 @@ def huber_gauss(error, sigma):
         Loss =  1/2 * error ** 2 
     else:
         Loss =   sigma*(abs(error)- 1/2*sigma)
-    g = 10 * math.e ** (-Loss/(sigma*sigma))  
+    g = 1000 * math.e ** (-Loss/(sigma*sigma))  
     return g
 
 def w_gauss(error, sigma2):
@@ -43,9 +42,9 @@ def  turning(insBuffer):
         if gyro:
             gyro_accumulate += gyro[1]
 
-    if gyro_accumulate >=  4:
+    if gyro_accumulate >=  3:
         return -1
-    elif gyro_accumulate <= -4:
+    elif gyro_accumulate <= -3:
         return 1
     else:
         return 0
@@ -117,9 +116,9 @@ def transition2(weight_dict, neighbor_dict,yaw,samplePeriod,speed,grid_dis):
             #print(error,w_gauss(error,orientation_sigma2 ) )
 
             if error > 0:
-                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error,orientation_sigma2 )  # belief * transition
+                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error,orientation_sigma )  # belief * transition
             else:  
-                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error_min,orientation_sigma2 )*(1-samplePeriod*speed/grid_dis)*0.2
+                new_weight_dict[str(neighbor)] += weight_dict[pos]*huber_gauss(error_min,orientation_sigma )*(1-samplePeriod*speed/grid_dis)*0.2
             #print(new_weight_dict)
             #ti.sleep(0.1)
     return new_weight_dict
@@ -163,10 +162,10 @@ def transition3(weight_dict, neighbor_dict,yaw,samplePeriod,speed,grid_dis):
             error = min([error, 360-error]) * math.pi /180 
             if error < error_min:
                 error_min = error
-            #print(error,w_gauss(error,orientation_sigma2 ) )
+
 
             if error != 0:
-                new_neighbor_dict_buff[str(neighbor)]  = huber_gauss(error,orientation_sigma2 )  # belief * transition
+                new_neighbor_dict_buff[str(neighbor)]  = huber_gauss(error,orientation_sigma )  # belief * transition
             else: 
                 new_neighbor_dict_buff[str(neighbor)] =  0
         #print(new_neighbor_dict_buff)
@@ -209,9 +208,8 @@ def transition(weight_dict, neighbor_dict,yaw,INS_samples):
 
             error = abs(yaw - theta)
             error = min([error, 360-error]) * math.pi /180 
-            #print(error,w_gauss(error,orientation_sigma2 ) )
             if error > 0:
-                new_weight_dict[str(neighbor)] += weight_dict[pos]*w_gauss(error,orientation_sigma2 )   # belief * transition
+                new_weight_dict[str(neighbor)] += weight_dict[pos]*w_gauss(error,orientation_sigma )   # belief * transition
             else:  
                 new_weight_dict[str(neighbor)] += weight_dict[pos]*INS_samples*0.01
             #print(new_weight_dict)
@@ -239,7 +237,8 @@ def update_gyroscope(turn, weight_dict, neighbor_dict):
         candidatePos = json.loads(pos)
         if isTurnPoint(candidatePos, neighbor_dict[pos]):
             weight_dict[pos] *= 5
-import matplotlib as plt
+        return weight_dict
+
 
 
 def ble_localization(bleTable):
@@ -323,7 +322,7 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
     gtFile = open("movements.dat")
     
     lines = gtFile.readlines()
-    print(lines)
+    #print(lines)
     rawPosTable = [] 
     for line in lines:
         pos = {}
@@ -403,13 +402,14 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
         # ------------- Turning  detection and update-----------#
         turn = turning(insBuffer)
         
-        if turn:
-            print("turn")
+        #if turn:
+            #print("turn")
         #else:
             #print("not turn")
         
         weight_dict = update_gyroscope(turn, weight_dict, neighbor_dict)
         weight_dict = normalization(weight_dict)
+  
         # -----------WiFi update----------------#
         ibeacon_pos = None
         if beaconBuffer:
@@ -509,22 +509,23 @@ def main(INS_samples = 20,speed = 2.5,point_dis = 1):
     #plt.show()
 
 def INS_Error_Draw():
-    speedList = [2+i*0.3 for i in range(21)]
+    #speedList = [2+i*0.3 for i in range(21)]
     #speedX = 4
-    global orientation_sigma2 
+    global orientation_sigma
     bestPerformanceError = []
     samplingList = []
-    iBeaconVars = [i*13.33 +13.33  for i in range(20)]
-    iBeaconVarsm = [i +1 for i in range(20)]
+    #iBeaconVars = [i*13.33 +13.33  for i in range(20)]
+    #iBeaconVarsm = [i +1 for i in range(20)]
     insError = [0.1+0.05*i for i in range(19)]
     insErrorDegree = [5.729+57.29*0.05*i for i in range(19)]
     for insE in insError:
-        orientation_sigma2 = insE
+        orientation_sigma = insE
+        
         orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
         rms_error = rms(hmmErrorList)
-        print("vars: " + str(insE) + "; error:"+ str(rms_error))
+        #print("vars: " + str(insE) + "; error:"+ str(rms_error))
         bestPerformanceError.append(rms_error)
-    orientation_sigma2 = 0.36
+    orientation_sigma = 0.36
     plt.xlim(6,57)
     tick =   [int(6+3*i)for i in range(18)]
     plt.xticks(tick)
@@ -546,7 +547,7 @@ def iBeacon_Error_Draw():
         orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
         errorList.append(rms(hmmErrorList))
         rms_error = rms(hmmErrorList)
-        print("vars: " + str(vars) + "; error:"+ str(rms_error))
+        #print("vars: " + str(vars) + "; error:"+ str(rms_error))
     plt.xlim(1,20)
     tick = [int(i+1)  for i in range(0,20)]
     plt.xticks(tick)
@@ -557,7 +558,58 @@ def iBeacon_Error_Draw():
     plt.plot(tick,errorList)   
     plt.savefig('BLE error.png')
     plt.show()
+
+def cdf_draw():
+    global ble_sigma,orientation_sigma
+    import particle_filter  as pf 
+    particleErrorList,time = pf.pf_process(2000)
+    orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
+
+    hmm_time_stamp  = [i*0.2 for i in range(len(hmmErrorList))]
+    hmm_error_sorted = sorted(hmmErrorList)
+    hmm_error_cdf = []
+    for i in range(len(hmm_error_sorted)):
+        hmm_error_cdf.append(i / len(hmmErrorList))
+
+    pf_time_stamp  = [i*0.2 for i in range(len(particleErrorList))]
+    pf_error_sorted = sorted(particleErrorList)
+    pf_error_cdf = []
+    for i in range(len(pf_error_sorted)):
+        pf_error_cdf.append(i / len(pf_error_sorted))
+
+    iBeacon_time_stamp = [i*1 for i in range(len(iBeaconErrorList))]        
+    iBeacon_error_cdf = []
+    for i in range(len(iBeaconErrorList)):
+        iBeacon_error_cdf.append(i/len(iBeaconErrorList))
+    iBeacon_error_sorted = sorted(iBeaconErrorList)
+    plt.xlabel("Error(m)")
+    plt.ylabel("CDF")
+    hmm = plt.plot(hmm_error_sorted,hmm_error_cdf,color = 'blue',linestyle='-',linewidth='2',label='FRICH')
+    pf = plt.plot(pf_error_sorted,pf_error_cdf,color = 'red',linestyle='--',linewidth='1.5',label='Particle filter')
+    wcl = plt.plot(iBeacon_error_sorted,iBeacon_error_cdf,color='green',linestyle=':',linewidth='1',label='iBeaconWCL')
+    #plt.legend([hmm, pf, wcl], ['FRICH', 'Particle Filter', 'iBeacon WCL'])
+    plt.legend()
+    plt.show()
+
+def error_with_time_draw():
+    global ble_sigma,orientation_sigma
+    import particle_filter  as pf 
+    particleErrorList,time = pf.pf_process(2000)
+    orientation,hmmErrorList,iBeaconErrorList = main(speed=4,INS_samples=20,point_dis=1)
+    hmm_time_stamp  = [i*0.2 for i in range(len(hmmErrorList))]
+    pf_time_stamp  = [i*0.2 for i in range(len(particleErrorList))]
+    iBeacon_time_stamp = [i*1 for i in range(len(iBeaconErrorList))]
+    plt.xlim((0,35))
+    plt.ylim((0,35))
+    wcl = plt.plot(iBeacon_time_stamp,iBeaconErrorList,color='green',linestyle=':',linewidth='1',label='iBeaconWCL')
+    pf = plt.plot(pf_time_stamp,particleErrorList,color = 'red',linestyle='--',linewidth='1.5',label='Particle filter')
+    hmm = plt.plot(hmm_time_stamp,hmmErrorList,color = 'blue',linestyle='-',linewidth='2',label='FRICH')
+    plt.xlabel("time stamp(s)")
+    plt.ylabel("error(m)")
+    plt.legend()
+    plt.show()
 if __name__ == '__main__':
+    error_with_time_draw()
     INS_Error_Draw()
     iBeacon_Error_Draw()
     '''

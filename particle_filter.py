@@ -37,7 +37,7 @@ maze_data = ( ( 2, 0, 1, 0, 0 ),
 import maze_generator as mg
 maze_data = mg.generateMazeData()
 world = Maze(maze_data)
-world.draw()
+#world.draw()
 ROBOT_HAS_COMPASS = True # Does the robot know where north is? If so, it
 # makes orientation a lot easier since it knows which direction it is facing.
 # If not -- and that is really fascinating -- the particle filter can work

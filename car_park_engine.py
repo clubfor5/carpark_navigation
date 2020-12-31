@@ -20,7 +20,7 @@ def huber_gauss(error, sigma):
         Loss =  1/2 * error ** 2 
     else:
         Loss =   sigma*(abs(error)- 1/2*sigma)
-    g = 100 * math.e ** (-Loss/(sigma*sigma))  
+    g = 10 * math.e ** (-Loss/(sigma*sigma))  
     return g
 
 def generateCandidatePoints(map):
@@ -272,32 +272,6 @@ def updateBle(bleTable, weight_dict):
                 ble_weight_dict[pos]+=  ble_weight* likelyhood
     for pos in ble_weight_dict:
         weight_dict[pos]*=ble_weight_dict[pos]
-    return weight_dict
-
-def updateMultiWiFi(wifi, weight_dict):
-    wifi_weight_dict = {}
-    for pos in weight_dict:
-        for wifiSignal in wifi:
-            wifi_pos = [wifiSignal['x'], wifiSignal['y']]
-            candidatePos = json.loads(pos)
-            dis = euclideanDistance(candidatePos, wifi_pos)
-            wifi_weight = w_gauss(dis, wifi_sigma2)
-            if not (pos in wifi_weight_dict.keys()):
-                wifi_weight_dict[pos] = wifi_weight * wifiSignal['likelihood']
-            else:
-                wifi_weight_dict[pos]+= wifi_weight * wifiSignal['likelihood']
-    for pos in weight_dict:
-        weight_dict[pos]*=wifi_weight_dict[pos]
-    return weight_dict
-
-def update_wifi(wifiPos,weight_dict):
-    for pos in weight_dict: 
-        candidatePos = json.loads(pos)
-        dis = euclideanDistance(candidatePos, wifiPos)
-        #print(candidatePos, wifiPos,dis)
-        wifi_weight = w_gauss(dis, wifi_sigma2)
-        #print(wifi_weight)
-        weight_dict[pos] *= wifi_weight
     return weight_dict
 
 def update_acclerometer():
